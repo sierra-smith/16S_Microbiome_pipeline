@@ -1,3 +1,201 @@
+#This section of the code obtains sequences from the MiSeq and prepares them for Qiime analyses. This includes adapter removal, renaming sequences, and adding Qiime labels.
+#This was developed by Sam Eliades sjeliade@ncsu.edu, Ed Higgins higginse@ou.edu, Krithi Sankaranarayanan ksankar@ou.edu.
+
+
+Downloading Necessary Software:
+#First things first, installing python2.7 on a local machine#
+#to install python2.7, download 64-Bit Command Line Installer for your OS (macOS = https://www.anaconda.com/download/#macos)#
+	
+	run the following:
+	bash ~/Downloads/Anaconda2-5.3.0-MacOSX-x86_64.sh
+	
+#This should be the start and of your welcome message, the default installed loation is fine so proceed with that#
+
+Welcome to Anaconda2 5.3.0
+
+In order to continue the installation process, please review the license
+agreement.
+Please, press ENTER to continue
+>>> 
+######
+Anaconda2 will now be installed into this location:
+/Users/sameliades/anaconda2
+
+  - Press ENTER to confirm the location
+  - Press CTRL-C to abort the installation
+  - Or specify a different location below
+
+[/Users/sameliades/anaconda2] >>> 
+PREFIX=/Users/sameliades/anaconda2
+
+#If you asked to add anaconda to bash_profile, say yes. If asked to download VSCode from Microsoft, say no.#
+
+#with python2.7 downloaded, time to create an environment that we can work with
+
+	run:
+	conda create -n python2 python=2.7 qiime matplotlib=1.4.3 -c bioconda
+	
+#conda create -n = create python environment, name it python 2. Set python version to 2.7. Download qiime and use matplotlib version 1.4.3, find those files in the bioconda repository (http://qiime.org/install/install.html)#
+
+#Now in our working environment, lets get Adapter removal#
+
+
+#First activate our new python environment#
+
+source activate python2
+
+conda install -c maxibor adapterremoval2
+
+#This will place AdapterRemoval here: /Users/sameliades/anaconda2/pkgs/adapterremoval2-2.2.2-0/bin/#
+
+#Now let's download the 32-bit version of UParse10. Super crappy that we have to deal with a 4gb RAM cap program but I don't have $1,500 for a full license...so we digress!#
+
+(C33Z33
+#this program is completely ready to go right out of the gate. If you mv this file from Downloads to some directory where you can access it easily, you're set. In my case, I've created a folder in Applications called Usearch10 with the file inside.
+_________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+Downloading Sequences:
+
+#For this tutorial, I will be looking at 288 samples from an Illumina run completed in April, 2018. This dataset consists of Philippine reptile cloacal samples, North American freshwater mussel samples, and Fiji iguana cloacal and fecal samples#
+
+CD folder titled FASTQ_Generation_2018-04-16_17_39_33Z-90775296 from Dropbox to Downloads
+
+#Now we see that individual fastq files are located in subfolders based in pairs. We have to pull out these fastq so that they're in a single folder. To do this, let's run a simple loop.#
+
+cd ~/Downloads/FASTQ_Generation_2018-04-16_17_39_33Z-90775296
+
+ls|while read folder
+> do
+> cd $folder
+> cp * ../
+> cd ../
+> done
+
+#to explain this loop- first list all files in the FASTQ folder, enter a while do loop using folder as the variable name. Enter each subfolder seqeuentially, copy all files there to the FASTQ folder, exit the subfolder and repeat#
+
+After confirming all files are copied successfully, remove all subfolders to clear some room in Downloads
+
+rm -r ds*
+
+#ok we have our paired files in a single folder. I don't love working in the Downloads directory for whatever reason, some I'm going to move everything to a new folder in my Desktop directory called Microbiome
+
+mkdir ~/Desktop/Microbiome
+mv *.fastq.gz ~/Desktop/Microbiome/
+cd ~/Desktop/Microbiome
+
+#In skimming these names, I've notice we have two issues in the dataset: 161-sa501-sb709-c_s161_l001_r1_001.fastq.gz, 27-sa503-sa704-c1_s27_l001_r1_001.fastq.gz. Both names are all lowercase for some reason (I am sure there is a reason though!!!)
+	#Because it's only two names, I'll go ahead and change these manually#
+	
+	mv 161-sa501-sb709-c_s161_l001_r1_001.fastq.gz 161-SA501-SB709-C_S161_L001_R1_001.fastq.gz
+	mv 27-sa503-sa704-c1_s27_l001_r1_001.fastq.gz 27-SA503-SA704-C1_S27_L001_R1_001.fastq.gz
+	
+#Now looking at these names for our raw files...they stink. They don't tell us anything about the individual samples so we are going to rename all of these files. I am a fan of renaming to $SpecimenID.$SamNo.fastq.gz, so that's what I'm going to do.#
+#Lets start by getting two lists, one for R1 and one for R2#
+
+ls *R1*|sort -V >R1old.names
+ls *R2*|sort -V >R2old.names
+
+#now we need a list of the new file names, one the includes specimen IDs and sample Nos. This is a list that I have pre-made (shoot me an email for this file)#
+#I made a file called R_New_Names.csv in Excel (a csv file obviously) in this file is SampleID.SampleNo.#
+#Now what I did is pulled up R1old.names in an excel file, copy and paste the new names with ".R1.fastq.gz"appeneded to each name, and save the new file as R1.names.txt. In this file now should have the originally crappy name in the first column, and in the second we should have SampleID.Sample.No.R1.fastq.gz. Repeat for R2###
+#Excel stinks and will leave invisible characters, so open these two new files in TextWrangler and save as UNIX files, removing invisible characters and potential issues#
+
+ok now back in the Microbiome Folder:
+
+cat R1.names.txt|while read old new
+do
+mv $old $new
+done
+
+cat R2.names.txt|while read old new
+do
+mv $old $new
+done
+
+#Woohoo! Files are renamed into something a bit more useable, we have all of the software we need, time for the fun stuff!(At this point it is fine to delete all naming files#
+_________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+Adapter Removal:
+
+#To Make life easier, let's split things into sub-directories in the Microbiome Folder#
+
+mkdir AR		#for adapter removal, indicating while files have been trimmed#
+
+#Then run adapter removal on all pairs, we can do this in a loop (make sure python2 is activated here, adjust number of computing threads as needed)#
+
+ls *.R1.fast*|sed -e 's/.R1.fastq.gz//'|while read sample; do /Users/sameliades/anaconda2/pkgs/adapterremoval2-2.2.2-0/bin/AdapterRemoval --file1 /Users/sameliades/Desktop/Microbiome/$sample.R1.fastq.gz --file2 /Users/sameliades/Desktop/Microbiome/$sample.R2.fastq.gz --basename /Users/sameliades/Desktop/Microbiome/AR/$sample.AR --collapse --minquality 30 --trimqualities --maxns 0 --trimns --threads 18; done
+
+#With adapter removal finished, go ahead and move all old raw sequences to a new sub-directory so they're out of the way (I called mine Sequences)#
+
+mkdir Sequences
+mv ls 
+
+#Ok so in the Microbiome folder we now have two sub-directories, AR (our adapter removal products) and Sequences (the raw fastq reads)# 
+
+#We now have to combine our collapsed files with our collapsed.truncated files back into a single fastq file#
+
+ls *.collapsed|sed -e "s/.AR.collapsed//"|while read sample
+do
+cat $sample.AR.collapsed > $sample.fastq
+cat $sample.AR.collapsed.truncated >> $sample.fastq
+done
+
+#now let's go ahead and move these new .fastq files to a new folder called analysis ready in our main Microbiome folder#
+
+cd ~/Desktop/Microbiome
+mkdir analysis_ready
+cd AR
+mv *.fastq ../analysis_ready
+cd ../analysis_ready
+
+#In this folder we have our cleaned sequences that we can proceed with#
+_________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+Add QIIME labels: (The following is edited from work by Ed Higgins, what a legend).
+
+#QIIME has a very specific naming convention that it wants followed, first we will need to change to that naming convention with FASTA files, then we will combine all sequences into a single file#
+#add_qiime_labels.py is a script that'll help out with this#
+# add_qiime_labels.py-"Takes a directory, a metadata mapping file, and a column name that contains the fasta file names that SampleIDs are associated with, combines all files that have valid fasta extensions into a single fasta file, with valid QIIME fasta labels"#
+	
+#First things first, we need to make this metadata mapping file#
+	 
+in analysis_ready
+	
+nano Metadata.txt		
+
+###Add the following as a the first line, separating by TABS (HASH IS MANDATORY)###
+
+#SampleID	BarcodeSequence	LinkerPrimerSequence	InputFileName	Description
+
+#save and exit the file, then populate it with samples names, two empty columns, and your sample name as the last columns#
+
+head Metadata.txt
+
+#should look like#
+
+#SampleID	BarcodeSequence	LinkerPrimerSequence	InputFileName	Description
+CDS80677											CDS80677.fna	CDS80677
+
+
+##Will need to convert fastq to fasta using a qiime command
+#first, create an output folder (split)
+
+mkdir split
+ls *.fastq|while read LINE; do convert_fastaqual_fastq.py -c fastq_to_fastaqual -f $LINE -o split/; done &
+
+remove .qual files (they're antiquated)#
+
+#give path to split folder in the command and finally run add_qiime_labels#
+
+add_qiime_labels.py -i split/ -m Metadata.txt -c InputFileName -o combined_seqs.fna
+
+#At this point, our sequences are fully processed and we are reading to begin de novo OTU selection and then move into QIIME analyses!#
+______________________________________
+
+#The remaining code uses Qiime2 for alpha and beta diversity analyses in addition to compositional analyses (i.e. generating relative abundances for microbes, taxa barplots, etc).
+#This workflow was generated and run by me, Sierra Smith (sierrasmith@ou.edu).
+
+
 LINKS TO HELPFUL WORKFLOWS
 
 https://chmi-sops.github.io/mydoc_qiime2.html
