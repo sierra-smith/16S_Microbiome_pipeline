@@ -1,0 +1,423 @@
+LINKS TO HELPFUL WORKFLOWS
+
+https://chmi-sops.github.io/mydoc_qiime2.html
+http://compbio.ucsd.edu/wp-content/uploads/2018/07/20180621_oslo_university_microbiome_analysis_with_qiime2_tutorial.pdf
+https://docs.qiime2.org/2019.7/tutorials/qiime2-for-experienced-microbiome-researchers/
+https://forum.qiime2.org/t/tutorial-integrating-qiime2-and-r-for-data-visualization-and-analysis-using-qiime2r/4121
+https://microbiome.github.io/tutorials/Betadiversity.html
+https://library.qiime2.org/plugins/deicode/19/
+https://forum.qiime2.org/t/tutorial-integrating-qiime2-and-r-for-data-visualization-and-analysis-using-qiime2r/4121
+https://forum.qiime2.org/t/tutorial-integrating-qiime2-and-r-for-data-visualization-and-analysis-using-qiime2r/4121
+#Submitting a batch job onto OSCER#
+#Edit the following information for your job, copy and paste into a .txt or .sh file#
+#Upload the file to OSCER and run command#
+
+#!/bin/bash
+#
+#SBATCH --partition=normal
+#SBATCH --ntasks=1
+#SBATCH --mem=10000
+#SBATCH --output=SNS_%J_stdout.txt
+#SBATCH --error=SNS_%J_stderr.txt
+#SBATCH --time=6:00:00
+#SBATCH --job-name=SNS
+#SBATCH --mail-user=sierrasmith@ou.edu
+#SBATCH --mail-type=ALL
+#SBATCH --chdir=/home/sierrasmith/qiime2-SNS-otu-clustering
+qiime vsearch cluster-features-closed-reference \
+--i-table table.qza \
+--i-sequences derep-seqs.qza \
+--i-reference-sequences 97_otus_16S.qza \
+--p-perc-identity 0.97 \
+--o-clustered-table table-cr-97.qza \
+--o-clustered-sequences rep-seqs-cr-97.qza \
+--o-unmatched-sequences unmatched-cr-97.qza
+
+#cd into the directory with the file and type sbatch filename and there should be a job number assigned#
+
+#Entering into Qiime in OSCER#
+
+module load QIIME2/2018.11-Miniconda3
+
+#Copying files into OSCER#
+
+#Having NOT connected to Schooner yet, type#
+
+scp directory_of_your_file/yourfilename yourusername@schooner.oscer.ou.edu:target_directory/
+
+#Example:
+scp Desktop/SNS/analysis_ready/combined_seqs.fna sierrasmith@schooner.oscer.ou.edu:qiime2-SNS-otu-clustering/
+
+#Uploading Silva reference data#
+
+scp Desktop/Silva/rep_set/rep_set_16S_only/97/silva_132_97_16S.fna sierrasmith@schooner.oscer.ou.edu:qiime2-SNS-otu-clustering/
+
+QIIME2 OTU CLUSTERING/TAXONOMY ASSIGNMENT
+
+#Reformatting reference data for Qiime2#
+
+qiime tools import \
+> --input-path silva_132_97_16S.fna \
+> --output-path 97_otus_16S.qza \ #Must be in this format…I think#
+> --type FeatureData[Sequence]
+
+#Dereplicating a SampleData(Sequences) artifact…basically you’re just reformatting your sequence data for Qiime2#
+
+qiime tools import \
+  --input-path yourfilename.fna \
+  --output-path yourfilename.qza \
+  --type SampleData[Sequences]
+
+qiime vsearch dereplicate-sequences \
+  --i-sequences yourfilename.qza \
+  --o-dereplicated-table table.qza \
+  --o-dereplicated-sequences derep-seqs.qza
+
+#Closed-reference clustering#
+
+qiime vsearch cluster-features-closed-reference \
+--i-table table.qza \
+--i-sequences derep-seqs.qza \
+--i-reference-sequences 97_otus_16S.qza \
+--p-perc-identity 0.97 \
+--o-clustered-table table-cr-97.qza \
+--o-clustered-sequences rep-seqs-cr-97.qza \
+--o-unmatched-sequences unmatched-cr-97.qza
+
+#Visualizing OTU table (you can’t convert to .qzv…boo)#
+#This exports your .qza file as a biom file to your “exported otu table directory#
+qiime tools export \
+> --input-path table-cr-97.qza \
+> --output-path exported-otu-table
+
+cd exported-otu-table
+biom convert -i exported-otu-table/feature-table.biom -o exported-otu-table/otu-table.txt --to-tsv
+
+#Export the .txt file out of OSCER and into your home directory, open with Excel to see your OTU table#
+
+#The pre-trained Silva 132 99% full-length taxonomy file had some spaces, so here is the code I used to fix it, but I will be switching classifiers#
+
+qiime tools export taxonomy.qza \
+  --output-dir taxonomy-with-spaces
+qiime metadata tabulate \
+  --m-input-file taxonomy-with-spaces/taxonomy.tsv  \
+  --o-visualization taxonomy-as-metadata.qzv
+qiime tools export taxonomy-as-metadata.qzv \
+  --output-dir taxonomy-as-metadata
+qiime tools import \
+  --type 'FeatureData[Taxonomy]' \
+  --input-path taxonomy-as-metadata/metadata.tsv \
+  --output-path taxonomy-without-spaces.qza
+
+#Assigning taxonomy to your OTU table with a pretrained classifier#
+#Upload the reference taxonomy database to OSCER#
+
+qiime taxa collapse \
+> --i-table table-cr-97.qza \
+> --i-taxonomy taxonomy-without-spaces.qza \
+> --p-level 7 \
+> --o-collapsed-table feature-table-species.qza
+
+#Converting to a format you can put into Qiime2 view and visualize with code above#
+
+#Combining metadata info and taxonomy info#
+
+qiime metadata tabulate \
+  --m-input-file rep-seqs.qza \
+  --m-input-file taxonomy.qza \
+  --o-visualization tabulated-feature-metadata.qzv
+
+#BoxPlot visualization, you cannot use this function without the taxonomy file…therefore you should not try to visual a table that has taxonomy assigned#
+
+qiime taxa barplot \
+—i-table table-cr-97.qza \
+—i-taxonomy taxonomy-without-spaces.qza \
+—m-metadata-file Metadata2_corrected.txt \
+—o-visualization taxa-bar-plots.qzv
+
+#Before getting into abundance visualization stuff, I’d like to separate my samples based on project#
+#I created two metadata files titled “Squamate-sample.txt” and “Venom-sample.txt” and simply copied the samples I wanted and the header into those separate files. After uploading the files to OSCER, I ran this code for each#
+
+#Assigning taxonomy to the venom table#
+
+qiime taxa collapse \
+—i-table venom-filtered-table.qza \
+—i-taxonomy taxonomy-without-spaces.qza \
+—p-level 6 \
+—o-collapsed-table venom-table-with-taxonomy.qza
+
+#Visualizing the venom table#
+
+qiime taxa barplot \
+—i-table venom-filtered-table.qza \
+—i-taxonomy taxonomy-without-spaces.qza \
+—m-metadata-file Venom-samples.txt \
+—o-visualization venom-taxa-bar-plot.qzv
+
+#An attempt at filtering out the “least represented taxa”…but it didn’t seem to make a difference#
+
+qiime feature-table filter-features \
+—i-table venom-filtered-table.qza \
+—p-min-frequency 10 \
+—o-filtered-table venom-min-freq-filtered-table.qza
+
+qiime taxa barplot \
+—i-table venom-min-freq-filtered-table.qza \
+—i-taxonomy taxonomy-without-spaces.qza \
+—m-metadata-file Venom-samples.txt \
+—o-visualization venom-min-freq-filtered-table.qzv
+
+Data Analysis
+
+#Now we will be creating a Robust Aitchison PCA through QIIME2 to visualize beta diversity via a compositional biplot#
+
+module load QIIME2/2018.11-Miniconda3
+pip install deicode --user #must attach —user if using OSCER#
+
+qiime deicode rpca \
+> --i-table venom-filtered-table.qza \
+> --p-min-feature-count 10 \
+> --p-min-sample-count 500 \
+> --o-biplot venom-ordination.qza \
+> --o-distance-matrix venom-ait-distance.qza
+
+ qiime emperor biplot \
+> --i-biplot venom-ordination.qza \
+> --m-sample-metadata-file Venom-samples-edit2.txt \
+> --m-feature-metadata-file taxonomy-without-spaces.qza \
+> --o-visualization venom-biplot-3.qzv \
+> --p-number-of-features 8 #I ended up changing to 5 in venom-biplot-4.qzv because that was the default#
+
+#Okay, so now we will run a permanova to get the statistical significance for BodySite and SpeciesID still using Deicode#
+
+#Before running beta-group-significance the first time, I had to run this command, and I’m not sure why, but it worked!#
+
+echo "backend: Agg" > ~/.config/matplotlib/matplotlibrc
+
+qiime diversity beta-group-significance \
+—-i-distance-matrix venom-ait-distance.qza \ 
+--m-metadata-file Venom-samples-edit2.txt \
+-—m-metadata-column BodySite \
+-—p-method permanova \
+-—o-visualization venom-bodysite-beta-significance.qzv
+
+qiime diversity beta-group-significance \
+-—i-distance-matrix venom-ait-distance.qza \
+-—m-metadata-file Venom-samples-edit2.txt \
+—-m-metadata-column SpeciesID \
+-—p-method permanova \
+-—o-visualization venom-speciesID-beta-significance.qzv
+
+#The PCA produced by the Deicode Qiime2 plug in is really awesome, but there is not a good format to export it out of the Qiime2 View, so I created a PCA in R using the Qiime2R package#
+
+library(tidyverse)
+devtools::install_github("jbisanz/qiime2R")
+library(qiime2R)
+
+#Loading files from Qiime2 into Rstudio#
+
+metadata<-read_csv("~/Desktop/Venom-samples-edit2.csv")
+
+SVs<-read_qza("~/Desktop/venom-filtered-table.qza")
+
+taxonomy<-read_qza("~/Desktop/taxonomy-without-spaces.qza")
+
+RPCA<-read_qza("~/Desktop/venom-ordination.qza")
+
+#Creating a PCA that has BodySite as different geometric figures and SpeciesID as a different color#
+
+RPCA$data$Vectors %>%
+  rename("#SampleID"=SampleID) %>%
+  left_join(metadata) %>%
+  ggplot(aes(x=PC1, y=PC2, shape=BodySite, color=SpeciesID)) + geom_point() + xlab(paste("PC1: ", round(100*RPCA$data$ProportionExplained[1]),"%")) +  
+  ylab(paste("PC2: ", round(100*RPCA$data$ProportionExplained[2]), "%")) + theme_bw() + ggtitle("Venom Aitchison PCA")
+
+Exploring Other Analyses (Bray-Curtis and Unweighted-Unifrac)
+
+#First, we can summarize the data table and sequences to explore the appropriate rarefaction depths (which samples will be dropped)#
+
+qiime feature-table summarize \
+> --i-table venom-filtered-table.qza \
+> --o-visualization venom-filtered-table.qzv \
+> --m-sample-metadata-file Venom-samples-edit2.txt 
+
+#After viewing the filtered table in Qiime2 view, I’ve decided to rarefy to 1,000 sequences#
+
+#First, I will filter out the venom sequences from the original sequence file
+
+qiime feature-table filter-seqs \
+> --i-data rep-seqs-cr-97.qza \
+> --i-table venom-filtered-table.qza \ 
+> --o-filtered-data venom-filtered-seqs.qza
+
+#Building a phylogenetic tree#
+
+#Aligning your sequences to find homologous regions of the gene#
+
+qiime alignment mafft 
+--i-sequences venom-filtered-seqs.qza 
+--o-alignment aligned-venom-seqs.qza
+
+#Mask (or filter) the alignment to remove positions that are highly variable#
+
+qiime alignment mask \
+> --i-alignment aligned-venom-seqs.qza \
+> --o-masked-alignment masked-aligned-venom-seqs.qza
+
+#Create the tree using Fasttree program#
+
+qiime phylogeny fasttree \
+> --i-alignment masked-aligned-venom-seqs.qza \
+> --o-tree unrooted-venom-tree.qza
+
+#Root the tree using the longest root#
+
+qiime phylogeny midpoint-root \
+> --i-tree unrooted-venom-tree.qza \
+> --o-rooted-tree rooted-venom-tree.qza
+
+#Alpha rarefaction PLOT#
+
+#This will allow you to see where your samples “plateau” so you can choose the correct sequencing depth to rarefy to#
+
+#I created an additional tree for the venom samples (rooted-venom-filtered-tree.qza” because I’m a silly goose#
+
+#I started with 50 because that was the lowest # of seqs in a sample, but the plot was still very curved so I increased the “—p-max-depth” to 300 and then 500#
+
+qiime diversity alpha-rarefaction \
+> --i-table venom-filtered-table.qza \
+> --i-phylogeny rooted-venom-filtered-tree.qza \
+> --p-max-depth 50 \
+> --m-metadata-file Venom-samples-edit2.txt \
+> --o-visualization venom-alpha-rarefaction.qzv
+
+#Alpha rarefaction#
+
+ qiime diversity core-metrics-phylogenetic \
+> --i-phylogeny rooted-venom-tree.qza \
+> --i-table venom-filtered-table.qza \
+> --p-sampling-depth 1000 \		#This value should be chosen based on the venom-filtered-table.qzv file#
+> --m-metadata-file Venom-samples-with-habitat.txt \
+> --output-dir core-metrics-results
+
+#Alpha diversity group significance with Observed OTUS#
+
+qiime diversity alpha-group-significance \
+> --i-alpha-diversity core-metrics-results/observed_otus_vector.qza \
+> --m-metadata-file Venom-samples-with-habitat.txt \
+> --o-visualization core-metrics-results/obs-otu-group-significance.qzv
+
+#Beta diversity group significance with Bray-Curtis (Quantitative measure weighed by taxon abundance) and Unweighted-Unifrac (Qualitative phylogenetic-based metric)
+
+qiime diversity beta-group-significance \
+> --i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+> --m-metadata-file Venom-samples-with-habitat.txt \
+> --m-metadata-column SpeciesID \
+> --o-visualization core-metrics-results/unweighted-unifrac-speciesID-beta-significance.qzv \
+> --p-pairwise
+
+qiime diversity beta-group-significance \
+--i-distance-matrix core-metrics-results/bray_curtis_distance_matrix.qza 
+--m-metadata-file Venom-samples-with-habitat.txt 
+--m-metadata-column SpeciesID 
+--o-visualization core-metrics-results/bray-curtis-speciesID-beta-significance.qzv 
+--p-pairwise
+
+
+#Differential abundance analysis for cloacal samples ONLY#
+
+qiime taxa collapse \
+> --i-table venom-cloacal-quality-filtered-table.qza \
+> --i-taxonomy taxonomy-without-spaces.qza \
+> --p-level 2 \
+> --o-collapsed-table venom-cloacal-quality-filtered-taxonomy-table.qza
+
+#Using ANCOM (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4450248/) to find the differentially abundant taxa in each sample#
+
+qiime composition add-pseudocount \
+> --i-table venom-cloacal-quality-filtered-taxonomy-table.qza \
+> --o-composition-table comp-cloacal-taxonomy-table.qza
+
+qiime composition ancom \
+> --i-table comp-cloacal-taxonomy-table.qza \
+> --m-metadata-file Venom-cloacal-samples-quality-filtered.txt \
+> --m-metadata-column SpeciesID \
+> --o-visualization ancom-venom-cloacal-with-taxonomy.qzv
+
+#Relative abundance (percentages)#
+
+qiime feature-table relative-frequency \
+—i-table venom-cloacal-quality-filtered-taxonomy-level2-table.qza \
+—o-relative-frequency-table rel-cloacal-table-phyla.qza
+
+qiime tools export \
+—input-path rel-cloacal-table-phyla.qza \
+—output-path rel-table
+
+cd rel-table/
+
+biom convert -i feature-table.biom -o rel-phyla-cloacal-table.tsv --to-tsv
+
+#Plot percent abundance in Excel#
+
+#SKINK MICROBIOME
+
+qiime feature-table filter-samples \
+--i-table squamate-filtered-table.qza \
+--m-metadata-file Skink-samples-only.txt \
+--o-filtered-table Skink-filtered-table.qza
+
+qiime feature-table filter-seqs \
+--i-data rep-seqs-cr-97.qza \
+--i-table Skink-filtered-table.qza \
+--o-filtered-data skink-filtered-seqs.qza
+
+qiime alignment mafft 
+--i-sequences skink-filtered-seqs.qza 
+--o-alignment aligned-skink-seqs.qza
+
+qiime alignment mask \
+—i-alignment aligned-skink-seqs.qza \
+—o-masked-alignment correct-masked-aligned-skink-seqs.qza
+
+qiime phylogeny fasttree \
+—i-alignment correct-masked-aligned-skink-seqs.qza \
+—o-tree correct-unrooted-skink-tree.qza
+
+qiime phylogeny midpoint-root \
+--i-tree correct-unrooted-skink-tree.qza \
+--o-rooted-tree correct-rooted-skink-tree.qza
+
+qiime diversity core-metrics-phylogenetic \
+--i-phylogeny correct-rooted-skink-tree.qza \
+--i-table Skink-filtered-table.qza \
+--p-sampling-depth 1000 \
+--m-metadata-file Skink-samples-only.txt \
+--output-dir correct-skink-core-metrics
+
+qiime diversity beta-group-significance \
+--i-distance-matrix correct-skink-core-metrics/unweighted_unifrac_distance_matrix.qza \
+--m-metadata-file Skink-samples-only.txt \
+--m-metadata-column SpeciesID \
+--o-visualization correct-skink-core-metrics/unweighted-unifrac-speciesID-beta-significance.qzv \
+--p-pairwise
+
+qiime taxa barplot \
+—i-table Skink-filtered-table.qza \
+—i-taxonomy taxonomy-without-spaces.qza \ 
+--m-metadata-file Skink-samples-only.txt
+--o-visualization Skink-taxa-barplot.qzv
+
+skink_SVs <- read_qza("Desktop/updated-skink-table.qza")
+
+skink_braycurtis_RPCA <- read_qza("Desktop/bray_curtis_pcoa_results.qza")
+
+taxonomy <- read_qza("~/Desktop/taxonomy-without-spaces.qza")
+
+metadata <- read_csv("Desktop/Updated(removed 262)-skink-samples-only.csv")
+
+skink_braycurtis_RPCA$data$Vectors %>%
+  rename("#SampleID"=SampleID) %>%
+  left_join(metadata) %>% 
+  ggplot(aes(x=PC1, y=PC2, color = SpeciesID)) + geom_point() + xlab(paste("PC1: ", round(100*skink_braycurtis_RPCA$data$ProportionExplained[1]),"%")) +  
+  ylab(paste("PC2: ", round(100*skink_braycurtis_RPCA$data$ProportionExplained[2]), "%")) + theme_bw() + ggtitle("Skink Bray-Curtis PCA")
