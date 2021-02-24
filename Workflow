@@ -1,5 +1,5 @@
 #This section of the code obtains sequences from the MiSeq and prepares them for Qiime analyses. This includes adapter removal, renaming sequences, and adding Qiime labels.
-#This was developed by Sam Eliades sjeliade@ncsu.edu, Ed Higgins higginse@ou.edu, Krithi Sankaranarayanan ksankar@ou.edu.
+#This portion of the pipeline was developed by Sam Eliades sjeliade@ncsu.edu, Ed Higgins higginse@ou.edu, and Krithi Sankaranarayanan ksankar@ou.edu.
 
 
 Downloading Necessary Software:
@@ -193,7 +193,7 @@ add_qiime_labels.py -i split/ -m Metadata.txt -c InputFileName -o combined_seqs.
 ______________________________________
 
 #The remaining code uses Qiime2 for alpha and beta diversity analyses in addition to compositional analyses (i.e. generating relative abundances for microbes, taxa barplots, etc).
-#This workflow was generated and run by me, Sierra Smith (sierrasmith@ou.edu).
+#This portion of the pipeline was generated and run by me, Sierra Smith (sierrasmith@ou.edu).
 
 
 LINKS TO HELPFUL WORKFLOWS
