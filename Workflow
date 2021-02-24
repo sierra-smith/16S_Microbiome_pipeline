@@ -1,5 +1,5 @@
 #This section of the code obtains sequences from the MiSeq and prepares them for Qiime analyses. This includes adapter removal, renaming sequences, and adding Qiime labels.
-#This portion of the pipeline was developed by Sam Eliades sjeliade@ncsu.edu, Ed Higgins higginse@ou.edu, and Krithi Sankaranarayanan ksankar@ou.edu.
+#This portion of the pipeline was developed by Sam Eliades sjeliades@ou.edu, Ed Higgins higginse@ou.edu, and Krithi Sankaranarayanan ksankar@ou.edu.
 
 
 Downloading Necessary Software:
