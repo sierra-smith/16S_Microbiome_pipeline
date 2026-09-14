@@ -1,7 +1,7 @@
 # 16S microbiome analysis pipeline: Smith et al. 2021
 
 ## Overview:
-This repository contains the analysis workflow used to analyze the 16S dataset from Smith et al. 2021 (doi: [10.3389/fmicb.2021.657754] (https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2021.657754/full)).
+This repository contains the analysis workflow used to analyze the 16S dataset from Smith et al. 2021 (https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2021.657754/full)).
 
 ## Software Used:
 Adapter Removal: AdapterRemoval v2 (Schubert et al. 2016)
