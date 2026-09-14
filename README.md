@@ -3,10 +3,13 @@
 ## Overview:
 This repository contains the analysis workflow used to analyze the 16S dataset from Smith et al. 2021 (https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2021.657754/full).
 
-## Software Used:
+### Software Used:
+
 Adapter Removal: AdapterRemoval v2 (Schubert et al. 2016)
-Analyses (OTU clustering, diversity analyses, taxonomic assignment): QIIME2 (Bolyen et al., 2019)
-Visualization: R (version 3.6.1; R Core Team, 2019)
+
+Analyses (OTU clustering, diversity analyses, taxonomic assignment): QIIME2 (Bolyen et al. 2019)
+
+Visualization: R (version 3.6.1; R Core Team 2019)
 
 ## References:
 Bolyen, E., Rideout, J. R., Dillon, M. R., Bokulich, N. A., Abnet, C. C., Al-
